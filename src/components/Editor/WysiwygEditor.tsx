@@ -1,4 +1,4 @@
-import { useEditor, EditorContent } from '@tiptap/react'
+import { useEditor, EditorContent, type Editor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Link from '@tiptap/extension-link'
 import Image from '@tiptap/extension-image'
@@ -11,9 +11,61 @@ import EditorToolbar from './EditorToolbar'
 import { markdownToHtml, htmlToMarkdown } from '../../utils/markdownConverter'
 
 export default function WysiwygEditor() {
-  const { content, setContent, setHasUnsavedChanges, saveFile } = useEditorStore()
-  const { autoSave, fontSize, fontFamily } = useSettingsStore()
+  const setContent = useEditorStore((state) => state.setContent)
+  const fontSize = useSettingsStore((state) => state.fontSize)
+  const fontFamily = useSettingsStore((state) => state.fontFamily)
   const isUpdatingFromStore = useRef(false)
+  const syncTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const idleSyncRef = useRef<number | null>(null)
+  const hasPendingSyncRef = useRef(false)
+  const lastSyncedMarkdownRef = useRef(useEditorStore.getState().content)
+
+  const cancelPendingSync = useCallback(() => {
+    if (syncTimerRef.current) {
+      clearTimeout(syncTimerRef.current)
+      syncTimerRef.current = null
+    }
+    if (idleSyncRef.current !== null) {
+      const cancelIdle = (window as Window & { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback
+      if (typeof cancelIdle === 'function') {
+        cancelIdle(idleSyncRef.current)
+      }
+      idleSyncRef.current = null
+    }
+  }, [])
+
+  const commitEditorToStore = useCallback(
+    (instance: Editor | null, force = false) => {
+      if (!instance || isUpdatingFromStore.current) return
+      if (!force && !hasPendingSyncRef.current) return
+      const markdown = htmlToMarkdown(instance.getHTML())
+      lastSyncedMarkdownRef.current = markdown
+      hasPendingSyncRef.current = false
+      setContent(markdown)
+    },
+    [setContent]
+  )
+
+  const scheduleCommitEditorToStore = useCallback(
+    (instance: Editor | null, delayMs = 260, force = false) => {
+      if (!instance) return
+      cancelPendingSync()
+      syncTimerRef.current = setTimeout(() => {
+        syncTimerRef.current = null
+        const run = () => {
+          idleSyncRef.current = null
+          commitEditorToStore(instance, force)
+        }
+        const requestIdle = (window as Window & { requestIdleCallback?: (cb: IdleRequestCallback, options?: IdleRequestOptions) => number }).requestIdleCallback
+        if (typeof requestIdle === 'function') {
+          idleSyncRef.current = requestIdle(() => run(), { timeout: 350 })
+        } else {
+          run()
+        }
+      }, delayMs)
+    },
+    [cancelPendingSync, commitEditorToStore]
+  )
 
   const editor = useEditor({
     extensions: [
@@ -38,13 +90,15 @@ export default function WysiwygEditor() {
         nested: true,
       }),
     ],
-    content: markdownToHtml(content),
-    onUpdate: ({ editor }) => {
+    content: markdownToHtml(lastSyncedMarkdownRef.current),
+    onUpdate: ({ editor, transaction }) => {
+      if (!transaction.docChanged) return
       if (isUpdatingFromStore.current) return
-      const html = editor.getHTML()
-      const markdown = htmlToMarkdown(html)
-      setContent(markdown)
-      setHasUnsavedChanges(true)
+      hasPendingSyncRef.current = true
+      scheduleCommitEditorToStore(editor)
+    },
+    onBlur: ({ editor }) => {
+      scheduleCommitEditorToStore(editor, 420)
     },
     editorProps: {
       attributes: {
@@ -62,19 +116,7 @@ export default function WysiwygEditor() {
             const checked = !node.attrs.checked
             tr.setNodeMarkup(pos, undefined, { ...node.attrs, checked })
             view.dispatch(tr)
-
-            // Auto-save after checkbox toggle
-            setTimeout(() => {
-              if (editor) {
-                const html = editor.getHTML()
-                const markdown = htmlToMarkdown(html)
-                setContent(markdown)
-                setHasUnsavedChanges(true)
-                if (autoSave) {
-                  setTimeout(() => saveFile(), 100)
-                }
-              }
-            }, 0)
+            scheduleCommitEditorToStore(editor, 0)
 
             return true
           }
@@ -84,21 +126,53 @@ export default function WysiwygEditor() {
     },
   })
 
-  // Sync content from store
   useEffect(() => {
-    if (editor) {
-      const currentHtml = editor.getHTML()
-      const currentMarkdown = htmlToMarkdown(currentHtml)
-      const expectedHtml = markdownToHtml(content)
-      // Only force replace editor HTML when store content truly came from outside this editor.
-      // This avoids degrading task-list nodes into plain "[ ]" text when markdown renderer differs.
-      if (currentMarkdown !== content && currentHtml !== expectedHtml) {
-        isUpdatingFromStore.current = true
-        editor.commands.setContent(expectedHtml)
-        setTimeout(() => { isUpdatingFromStore.current = false }, 0)
+    if (!editor) return
+
+    let previousContent = useEditorStore.getState().content
+    const unsubscribe = useEditorStore.subscribe((state) => {
+      const nextContent = state.content
+      if (nextContent === previousContent) {
+        return
+      }
+      previousContent = nextContent
+
+      if (nextContent === lastSyncedMarkdownRef.current) {
+        hasPendingSyncRef.current = false
+        return
+      }
+
+      const expectedHtml = markdownToHtml(nextContent)
+      if (editor.getHTML() === expectedHtml) {
+        lastSyncedMarkdownRef.current = nextContent
+        hasPendingSyncRef.current = false
+        return
+      }
+
+      cancelPendingSync()
+
+      isUpdatingFromStore.current = true
+      editor.commands.setContent(expectedHtml, false)
+      lastSyncedMarkdownRef.current = nextContent
+      hasPendingSyncRef.current = false
+      requestAnimationFrame(() => {
+        isUpdatingFromStore.current = false
+      })
+    })
+
+    return () => {
+      unsubscribe()
+    }
+  }, [cancelPendingSync, editor])
+
+  useEffect(() => {
+    return () => {
+      cancelPendingSync()
+      if (hasPendingSyncRef.current) {
+        commitEditorToStore(editor, true)
       }
     }
-  }, [content, editor])
+  }, [cancelPendingSync, commitEditorToStore, editor])
 
   // Broken image placeholder
   const handleImageError = useCallback((e: Event) => {
@@ -121,21 +195,36 @@ export default function WysiwygEditor() {
 
   useEffect(() => {
     if (!editor) return
-    const attachImageHandlers = () => {
-      editor.view.dom.querySelectorAll('img').forEach((img) => {
-        img.removeEventListener('error', handleImageError)
-        img.addEventListener('error', handleImageError)
-      })
+    const onImageErrorCapture = (event: Event) => {
+      const target = event.target
+      if (!(target instanceof HTMLImageElement)) {
+        return
+      }
+      handleImageError(event)
     }
-    editor.on('update', attachImageHandlers)
-    attachImageHandlers()
+    editor.view.dom.addEventListener('error', onImageErrorCapture, true)
     return () => {
-      editor.off('update', attachImageHandlers)
-      editor.view.dom.querySelectorAll('img').forEach((img) => {
-        img.removeEventListener('error', handleImageError)
-      })
+      editor.view.dom.removeEventListener('error', onImageErrorCapture, true)
     }
   }, [editor, handleImageError])
+
+  useEffect(() => {
+    if (!editor) return
+
+    const onSyncRequest = (event: Event) => {
+      const custom = event as CustomEvent<{ done?: () => void }>
+      if (hasPendingSyncRef.current) {
+        cancelPendingSync()
+        commitEditorToStore(editor, true)
+      }
+      custom.detail?.done?.()
+    }
+
+    window.addEventListener('editor-sync-request', onSyncRequest as EventListener)
+    return () => {
+      window.removeEventListener('editor-sync-request', onSyncRequest as EventListener)
+    }
+  }, [cancelPendingSync, commitEditorToStore, editor])
 
   if (!editor) {
     return (

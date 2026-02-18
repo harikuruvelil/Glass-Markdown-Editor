@@ -14,8 +14,10 @@ import Settings from './components/Settings'
 import UnsavedChangesDialog from './components/UnsavedChangesDialog'
 
 function App() {
-  const { viewMode, loadRecentFiles } = useEditorStore()
-  const { theme, loadSettings } = useSettingsStore()
+  const viewMode = useEditorStore((state) => state.viewMode)
+  const loadRecentFiles = useEditorStore((state) => state.loadRecentFiles)
+  const theme = useSettingsStore((state) => state.theme)
+  const loadSettings = useSettingsStore((state) => state.loadSettings)
   const [isFindReplaceOpen, setIsFindReplaceOpen] = useState(false)
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
 
@@ -45,11 +47,28 @@ function App() {
     }
 
     const animate = () => {
-      const lerp = 0.08
+      const lerp = 0.14
       currentX += (targetX - currentX) * lerp
       currentY += (targetY - currentY) * lerp
       setCursorVars(currentX, currentY)
+
+      const dx = Math.abs(targetX - currentX)
+      const dy = Math.abs(targetY - currentY)
+      if (dx < 0.08 && dy < 0.08) {
+        currentX = targetX
+        currentY = targetY
+        setCursorVars(currentX, currentY)
+        rafId = null
+        return
+      }
+
       rafId = window.requestAnimationFrame(animate)
+    }
+
+    const ensureAnimation = () => {
+      if (rafId === null) {
+        rafId = window.requestAnimationFrame(animate)
+      }
     }
 
     const handlePointerMove = (event: PointerEvent) => {
@@ -57,17 +76,18 @@ function App() {
       const height = window.innerHeight || 1
       targetX = Math.max(0, Math.min(100, (event.clientX / width) * 100))
       targetY = Math.max(0, Math.min(100, (event.clientY / height) * 100))
+      ensureAnimation()
     }
 
     const handlePointerLeave = () => {
       targetX = 50
       targetY = 50
+      ensureAnimation()
     }
 
     setCursorVars(50, 50)
-    window.addEventListener('pointermove', handlePointerMove)
-    window.addEventListener('pointerleave', handlePointerLeave)
-    rafId = window.requestAnimationFrame(animate)
+    window.addEventListener('pointermove', handlePointerMove, { passive: true })
+    window.addEventListener('pointerleave', handlePointerLeave, { passive: true })
 
     return () => {
       window.removeEventListener('pointermove', handlePointerMove)
@@ -81,15 +101,18 @@ function App() {
   useEffect(() => {
     loadSettings()
     loadRecentFiles()
+  }, [loadSettings, loadRecentFiles])
 
+  useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
     if (theme === 'system') {
       const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
       document.documentElement.classList.toggle('dark', prefersDark)
     }
+  }, [theme])
 
+  useEffect(() => {
     const cleanup = setupDragAndDrop()
-
     const handleOpenSettings = () => setIsSettingsOpen(true)
     const handleOpenFind = () => setIsFindReplaceOpen(true)
     const handleOpenFindReplace = () => setIsFindReplaceOpen(true)
@@ -104,7 +127,7 @@ function App() {
       window.removeEventListener('open-find', handleOpenFind)
       window.removeEventListener('open-find-replace', handleOpenFindReplace)
     }
-  }, [theme, loadSettings, loadRecentFiles])
+  }, [])
 
   return (
     <div className="app-shell relative h-screen overflow-hidden">
@@ -114,7 +137,9 @@ function App() {
         <div className="flex flex-1 overflow-hidden relative">
           <OutlineSidebar />
           <main className="flex-1 overflow-auto custom-scrollbar">
-            {viewMode === 'wysiwyg' ? <WysiwygEditor /> : <RawEditor />}
+            <div key={viewMode} className="editor-mode-transition h-full">
+              {viewMode === 'wysiwyg' ? <WysiwygEditor /> : <RawEditor />}
+            </div>
           </main>
         </div>
         <StatusBar />

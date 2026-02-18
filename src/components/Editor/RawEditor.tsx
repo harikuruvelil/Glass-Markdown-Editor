@@ -1,10 +1,13 @@
 import { useEditorStore } from '../../stores/editorStore'
 import { useSettingsStore } from '../../stores/settingsStore'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 
 export default function RawEditor() {
-  const { content, setContent, setHasUnsavedChanges } = useEditorStore()
-  const { codeFontFamily, fontSize, wordWrap } = useSettingsStore()
+  const content = useEditorStore((state) => state.content)
+  const setContent = useEditorStore((state) => state.setContent)
+  const codeFontFamily = useSettingsStore((state) => state.codeFontFamily)
+  const fontSize = useSettingsStore((state) => state.fontSize)
+  const wordWrap = useSettingsStore((state) => state.wordWrap)
   const [localContent, setLocalContent] = useState(content)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const lineNumbersRef = useRef<HTMLDivElement>(null)
@@ -17,7 +20,6 @@ export default function RawEditor() {
     const newContent = e.target.value
     setLocalContent(newContent)
     setContent(newContent)
-    setHasUnsavedChanges(true)
   }
 
   // Sync scroll between line numbers and textarea
@@ -27,8 +29,21 @@ export default function RawEditor() {
     }
   }
 
-  const lines = localContent.split('\n')
-  const lineCount = lines.length
+  const lineCount = useMemo(() => {
+    if (localContent.length === 0) return 1
+    let lines = 1
+    for (let i = 0; i < localContent.length; i += 1) {
+      if (localContent.charCodeAt(i) === 10) {
+        lines += 1
+      }
+    }
+    return lines
+  }, [localContent])
+
+  const lineNumbers = useMemo(
+    () => Array.from({ length: lineCount }, (_, i) => i + 1),
+    [lineCount]
+  )
 
   return (
     <div className="h-full w-full flex relative" style={{ fontSize: `${Math.max(fontSize - 2, 12)}px` }}>
@@ -44,9 +59,9 @@ export default function RawEditor() {
           minWidth: '48px',
         }}
       >
-        {Array.from({ length: lineCount }, (_, i) => (
-          <div key={i} className="leading-[1.65]" style={{ fontSize: '0.85em' }}>
-            {i + 1}
+        {lineNumbers.map((lineNumber) => (
+          <div key={lineNumber} className="leading-[1.65]" style={{ fontSize: '0.85em' }}>
+            {lineNumber}
           </div>
         ))}
       </div>

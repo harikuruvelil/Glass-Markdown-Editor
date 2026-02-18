@@ -1,4 +1,5 @@
 import { useSettingsStore } from '../stores/settingsStore'
+import { useEditorStore } from '../stores/editorStore'
 
 interface SettingsProps {
   isOpen: boolean
@@ -55,14 +56,18 @@ function SettingRow({ label, children }: { label: string; children: React.ReactN
 }
 
 export default function Settings({ isOpen, onClose }: SettingsProps) {
+  if (!isOpen) return null
+  return <SettingsPanel onClose={onClose} />
+}
+
+function SettingsPanel({ onClose }: { onClose: () => void }) {
+  const setViewMode = useEditorStore((state) => state.setViewMode)
   const {
     theme, fontFamily, fontSize, codeFontFamily, autoSave, autoSaveInterval,
     defaultView, spellCheck, wordWrap,
     setTheme, setFontFamily, setFontSize, setCodeFontFamily,
     setAutoSave, setAutoSaveInterval, setDefaultView, setSpellCheck, setWordWrap,
   } = useSettingsStore()
-
-  if (!isOpen) return null
 
   return (
     <>
@@ -173,7 +178,10 @@ export default function Settings({ isOpen, onClose }: SettingsProps) {
                   {(['wysiwyg', 'raw'] as const).map((v) => (
                     <button
                       key={v}
-                      onClick={() => setDefaultView(v)}
+                      onClick={() => {
+                        setDefaultView(v)
+                        setViewMode(v)
+                      }}
                       className="flex-1 py-2 rounded-button text-[12px] font-medium transition-glass uppercase"
                       style={{
                         background: defaultView === v ? 'rgba(184, 169, 232, 0.12)' : 'transparent',
@@ -182,7 +190,7 @@ export default function Settings({ isOpen, onClose }: SettingsProps) {
                         boxShadow: defaultView === v ? '0 0 12px rgba(184, 169, 232, 0.1)' : 'none',
                       }}
                     >
-                      {v}
+                      {v === 'wysiwyg' ? 'Full Text' : 'Raw'}
                     </button>
                   ))}
                 </div>

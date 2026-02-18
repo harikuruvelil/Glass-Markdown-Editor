@@ -4,8 +4,8 @@ import { useSettingsStore } from '../stores/settingsStore'
 import { handleFileOpen, handleFileSave, handleFileSaveAs, handleNewFile } from '../utils/fileHandling'
 
 export function useKeyboardShortcuts() {
-  const { viewMode, setViewMode } = useEditorStore()
-  const { wordWrap, setWordWrap } = useSettingsStore()
+  const setViewMode = useEditorStore((state) => state.setViewMode)
+  const setWordWrap = useSettingsStore((state) => state.setWordWrap)
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -22,6 +22,7 @@ export function useKeyboardShortcuts() {
               return
             case 'm':
               e.preventDefault()
+              const viewMode = useEditorStore.getState().viewMode
               setViewMode(viewMode === 'wysiwyg' ? 'raw' : 'wysiwyg')
               return
             case 'o':
@@ -105,6 +106,7 @@ export function useKeyboardShortcuts() {
       // F5 for word wrap toggle
       if (e.key === 'F5') {
         e.preventDefault()
+        const wordWrap = useSettingsStore.getState().wordWrap
         setWordWrap(!wordWrap)
       }
     }
@@ -113,5 +115,5 @@ export function useKeyboardShortcuts() {
     return () => {
       window.removeEventListener('keydown', handleKeyDown)
     }
-  }, [viewMode, setViewMode, wordWrap, setWordWrap])
+  }, [setViewMode, setWordWrap])
 }

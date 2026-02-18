@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
+use tauri::{image::Image, Manager};
 
 fn main() {
     tauri::Builder::default()
@@ -21,9 +22,15 @@ fn main() {
             commands::window_close,
             commands::window_start_dragging,
         ])
-        .setup(|_app| {
-            // Window effects will be handled via CSS backdrop-filter
-            // Native Mica/Acrylic can be added later with window-vibrancy crate if needed
+        .setup(|app| {
+            // Ensure the runtime window/taskbar icon is explicitly set to the bundled icon.
+            // This avoids Windows falling back to a generic placeholder icon.
+            let app_icon = Image::from_bytes(include_bytes!("../icons/icon.png"))?;
+            if let Some(window) = app.get_webview_window("main") {
+                window.set_icon(app_icon)?;
+            }
+
+            // Window effects are handled via CSS backdrop-filter.
             Ok(())
         })
         .run(tauri::generate_context!())

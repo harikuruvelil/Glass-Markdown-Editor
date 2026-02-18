@@ -104,15 +104,13 @@ export function setupDragAndDrop() {
             return
           }
 
-          const { setCurrentFile, setContent, setHasUnsavedChanges, updateStats } = useEditorStore.getState()
+          const { setCurrentFile, setContent } = useEditorStore.getState()
           await new Promise<void>((resolve, reject) => {
             const reader = new FileReader()
             reader.onload = (event) => {
               const content = event.target?.result as string
               setCurrentFile(null)
               setContent(content)
-              setHasUnsavedChanges(true)
-              updateStats(content)
               resolve()
             }
             reader.onerror = () => reject(reader.error)

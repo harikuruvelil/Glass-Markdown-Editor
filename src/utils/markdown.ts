@@ -69,27 +69,50 @@ export async function renderMarkdownWithHighlighting(content: string, theme: 'li
 }
 
 export function extractHeadings(content: string): Array<{ level: number; text: string; id: string }> {
-  const tokens = md.parse(content, {})
   const headings: Array<{ level: number; text: string; id: string }> = []
-
   const idCounts = new Map<string, number>()
+  const lines = content.split(/\r?\n/)
+  let inCodeFence = false
+  let fenceMarker = ''
 
-  for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i]
-    if (token.type === 'heading_open') {
-      const level = parseInt(token.tag.substring(1))
-      const nextToken = tokens[i + 1]
-      if (nextToken && nextToken.type === 'inline') {
-        const text = nextToken.content
-        const baseId =
-          text.toLowerCase().replace(/[^\w]+/g, '-').replace(/^-|-$/g, '') || `heading-${headings.length + 1}`
-        const idCount = (idCounts.get(baseId) || 0) + 1
-        idCounts.set(baseId, idCount)
-        const id = idCount === 1 ? baseId : `${baseId}-${idCount}`
-        headings.push({ level, text, id })
+  for (const line of lines) {
+    const trimmed = line.trimStart()
+
+    const fenceOpen = trimmed.match(/^(```+|~~~+)/)
+    if (fenceOpen) {
+      const marker = fenceOpen[1].startsWith('`') ? '```' : '~~~'
+      if (!inCodeFence) {
+        inCodeFence = true
+        fenceMarker = marker
+      } else if (fenceMarker === marker) {
+        inCodeFence = false
+        fenceMarker = ''
       }
+      continue
     }
+
+    if (inCodeFence) {
+      continue
+    }
+
+    const headingMatch = trimmed.match(/^(#{1,6})[ \t]+(.+?)\s*#*\s*$/)
+    if (!headingMatch) {
+      continue
+    }
+
+    const level = headingMatch[1].length
+    const text = headingMatch[2].trim()
+    if (!text) {
+      continue
+    }
+
+    const baseId =
+      text.toLowerCase().replace(/[^\w]+/g, '-').replace(/^-|-$/g, '') || `heading-${headings.length + 1}`
+    const idCount = (idCounts.get(baseId) || 0) + 1
+    idCounts.set(baseId, idCount)
+    const id = idCount === 1 ? baseId : `${baseId}-${idCount}`
+    headings.push({ level, text, id })
   }
-  
+
   return headings
 }

@@ -61,8 +61,12 @@ const IconEye = () => (
 )
 
 export default function TitleBar() {
-  const { currentFilePath, hasUnsavedChanges, viewMode, setViewMode } = useEditorStore()
-  const { theme, setTheme } = useSettingsStore()
+  const currentFilePath = useEditorStore((state) => state.currentFilePath)
+  const hasUnsavedChanges = useEditorStore((state) => state.hasUnsavedChanges)
+  const viewMode = useEditorStore((state) => state.viewMode)
+  const setViewMode = useEditorStore((state) => state.setViewMode)
+  const theme = useSettingsStore((state) => state.theme)
+  const setTheme = useSettingsStore((state) => state.setTheme)
 
   const fileName = currentFilePath ? currentFilePath.split(/[/\\]/).pop() || 'Untitled' : 'Untitled'
 
@@ -169,11 +173,12 @@ export default function TitleBar() {
       <div className="flex items-center gap-1 flex-1 justify-end min-w-0">
         <button
           onClick={() => setViewMode(viewMode === 'wysiwyg' ? 'raw' : 'wysiwyg')}
-          className="btn-glass !px-2.5 !py-1.5 !text-xs !gap-1"
+          className="btn-glass view-mode-toggle !px-2.5 !py-1.5 !text-xs !gap-1"
+          data-mode={viewMode}
           title="Toggle View (Ctrl+Shift+M)"
         >
-          {viewMode === 'wysiwyg' ? <IconCode /> : <IconEye />}
-          <span className="hidden sm:inline">{viewMode === 'wysiwyg' ? 'Raw' : 'WYSIWYG'}</span>
+          <span className="view-mode-icon">{viewMode === 'wysiwyg' ? <IconCode /> : <IconEye />}</span>
+          <span className="hidden sm:inline view-mode-label">{viewMode === 'wysiwyg' ? 'Raw' : 'Full Text'}</span>
         </button>
 
         <button

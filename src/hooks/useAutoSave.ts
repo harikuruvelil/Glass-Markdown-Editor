@@ -3,8 +3,11 @@ import { useEditorStore } from '../stores/editorStore'
 import { useSettingsStore } from '../stores/settingsStore'
 
 export function useAutoSave() {
-  const { hasUnsavedChanges, currentFilePath, saveFile } = useEditorStore()
-  const { autoSave, autoSaveInterval } = useSettingsStore()
+  const hasUnsavedChanges = useEditorStore((state) => state.hasUnsavedChanges)
+  const currentFilePath = useEditorStore((state) => state.currentFilePath)
+  const saveFile = useEditorStore((state) => state.saveFile)
+  const autoSave = useSettingsStore((state) => state.autoSave)
+  const autoSaveInterval = useSettingsStore((state) => state.autoSaveInterval)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   useEffect(() => {

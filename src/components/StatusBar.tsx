@@ -2,8 +2,11 @@ import { useEditorStore } from '../stores/editorStore'
 import { useSettingsStore } from '../stores/settingsStore'
 
 export default function StatusBar() {
-  const { wordCount, lineCount, characterCount, viewMode } = useEditorStore()
-  const { wordWrap } = useSettingsStore()
+  const wordCount = useEditorStore((state) => state.wordCount)
+  const lineCount = useEditorStore((state) => state.lineCount)
+  const characterCount = useEditorStore((state) => state.characterCount)
+  const viewMode = useEditorStore((state) => state.viewMode)
+  const wordWrap = useSettingsStore((state) => state.wordWrap)
 
   return (
     <footer className="glass-subtle border-gradient-top shrink-0 flex items-center justify-between px-4 h-7 text-[11px] tracking-wide z-20">
@@ -32,7 +35,7 @@ export default function StatusBar() {
             color: viewMode === 'wysiwyg' ? '#4A90D9' : '#9B8AD4',
           }}
         >
-          {viewMode === 'wysiwyg' ? 'WYSIWYG' : 'RAW'}
+          {viewMode === 'wysiwyg' ? 'FULL TEXT' : 'RAW'}
         </span>
       </div>
     </footer>

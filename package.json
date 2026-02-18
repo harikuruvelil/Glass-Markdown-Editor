@@ -1,6 +1,6 @@
 {
   "name": "markdown-notes-app",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A beautiful Markdown viewer and editor for Windows",
   "type": "module",
   "scripts": {
@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "tauri:dev": "powershell -ExecutionPolicy Bypass -File src-tauri/create-icon.ps1 && set \"CARGO_TARGET_DIR=..\\target-tauri\" && tauri dev",
-    "tauri:build": "powershell -ExecutionPolicy Bypass -File src-tauri/create-icon.ps1 && set \"CARGO_TARGET_DIR=..\\target-tauri\" && tauri build"
+    "tauri:build": "set \"FORCE_ICON_RELINK=1\" && powershell -ExecutionPolicy Bypass -File src-tauri/create-icon.ps1 && set \"CARGO_TARGET_DIR=..\\target-tauri\" && tauri build"
   },
   "dependencies": {
     "@tailwindcss/typography": "^0.5.19",

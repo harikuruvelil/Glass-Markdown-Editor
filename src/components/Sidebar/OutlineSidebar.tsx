@@ -15,15 +15,20 @@ const IconClose = () => (
 )
 
 export default function OutlineSidebar() {
-  const { content, viewMode } = useEditorStore()
+  const content = useEditorStore((state) => state.content)
+  const viewMode = useEditorStore((state) => state.viewMode)
   const [headings, setHeadings] = useState<Array<{ level: number; text: string; id: string }>>([])
   const [isOpen, setIsOpen] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
 
   useEffect(() => {
-    const extracted = extractHeadings(content)
-    setHeadings(extracted)
-  }, [content, viewMode])
+    const timeout = window.setTimeout(() => {
+      const extracted = extractHeadings(content)
+      setHeadings(extracted)
+    }, 200)
+
+    return () => window.clearTimeout(timeout)
+  }, [content])
 
   // Keep heading IDs in the rendered document aligned with the extracted outline.
   useEffect(() => {
@@ -87,14 +92,14 @@ export default function OutlineSidebar() {
       )}
 
       {/* Sidebar panel */}
-      {isOpen && (
+      {headings.length > 0 && (
         <aside
-          className="w-60 shrink-0 flex flex-col overflow-hidden animate-slide-in-left z-40"
+          className={`outline-panel shrink-0 flex flex-col overflow-hidden z-40 ${isOpen ? 'is-open' : 'is-closed'}`}
           style={{
             background: 'var(--canvas-surface)',
             backdropFilter: 'blur(32px) saturate(200%)',
             WebkitBackdropFilter: 'blur(32px) saturate(200%)',
-            borderRight: '1px solid var(--canvas-border)',
+            borderRight: isOpen ? '1px solid var(--canvas-border)' : '1px solid transparent',
           }}
         >
           {/* Header */}

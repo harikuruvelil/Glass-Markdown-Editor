@@ -42,7 +42,12 @@ function ToggleChip({ active, onClick, label }: { active: boolean; onClick: () =
 }
 
 export default function FindReplace({ isOpen, onClose }: FindReplaceProps) {
-  const { content } = useEditorStore()
+  if (!isOpen) return null
+  return <FindReplacePanel onClose={onClose} />
+}
+
+function FindReplacePanel({ onClose }: { onClose: () => void }) {
+  const [content, setContent] = useState(() => useEditorStore.getState().content)
   const [findText, setFindText] = useState('')
   const [replaceText, setReplaceText] = useState('')
   const [matchCase, setMatchCase] = useState(false)
@@ -52,10 +57,17 @@ export default function FindReplace({ isOpen, onClose }: FindReplaceProps) {
   const findInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (isOpen && findInputRef.current) {
+    if (findInputRef.current) {
       setTimeout(() => findInputRef.current?.focus(), 100)
     }
-  }, [isOpen])
+  }, [])
+
+  useEffect(() => {
+    const unsubscribe = useEditorStore.subscribe((state) => {
+      setContent(state.content)
+    })
+    return () => unsubscribe()
+  }, [])
 
   // Count matches
   useEffect(() => {
@@ -74,19 +86,16 @@ export default function FindReplace({ isOpen, onClose }: FindReplaceProps) {
 
   const doReplace = (all: boolean) => {
     if (!findText) return
-    const { setContent, setHasUnsavedChanges } = useEditorStore.getState()
+    const { content: liveContent, setContent } = useEditorStore.getState()
     const flags = matchCase ? (all ? 'g' : '') : (all ? 'gi' : 'i')
     const escaped = findText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const pattern = wholeWord ? `\\b${escaped}\\b` : escaped
     try {
       const regex = new RegExp(pattern, flags)
-      const newContent = content.replace(regex, replaceText)
+      const newContent = liveContent.replace(regex, replaceText)
       setContent(newContent)
-      setHasUnsavedChanges(true)
     } catch { /* noop */ }
   }
-
-  if (!isOpen) return null
 
   return (
     <>

@@ -29,9 +29,85 @@ interface EditorState {
   updateStats: (content: string) => void
 }
 
+function computeDocumentStats(content: string) {
+  let lines = 1
+  let words = 0
+  let inWord = false
+
+  for (let i = 0; i < content.length; i += 1) {
+    const code = content.charCodeAt(i)
+    if (code === 10) {
+      lines += 1
+    }
+
+    const isWhitespace =
+      code === 32 || code === 9 || code === 10 || code === 13 || code === 12 || code === 11
+
+    if (isWhitespace) {
+      if (inWord) {
+        words += 1
+        inWord = false
+      }
+    } else {
+      inWord = true
+    }
+  }
+
+  if (inWord) {
+    words += 1
+  }
+
+  return {
+    wordCount: words,
+    lineCount: lines,
+    characterCount: content.length,
+  }
+}
+
+function requestEditorSyncIfNeeded(): Promise<void> {
+  if (typeof window === 'undefined') {
+    return Promise.resolve()
+  }
+
+  return new Promise((resolve) => {
+    let settled = false
+    const timeout = window.setTimeout(() => {
+      if (settled) return
+      settled = true
+      resolve()
+    }, 180)
+
+    window.dispatchEvent(
+      new CustomEvent('editor-sync-request', {
+        detail: {
+          done: () => {
+            if (settled) return
+            settled = true
+            window.clearTimeout(timeout)
+            resolve()
+          },
+        },
+      })
+    )
+  })
+}
+
 export const useEditorStore = create<EditorState>()(
   persist(
-    (set, get) => ({
+    (set, get) => {
+      let pendingStatsTimer: ReturnType<typeof setTimeout> | null = null
+
+      const scheduleStatsUpdate = (content: string) => {
+        if (pendingStatsTimer) {
+          clearTimeout(pendingStatsTimer)
+        }
+        pendingStatsTimer = setTimeout(() => {
+          pendingStatsTimer = null
+          get().updateStats(content)
+        }, 120)
+      }
+
+      return ({
       currentFilePath: null,
       content: '',
       viewMode: 'wysiwyg',
@@ -42,8 +118,11 @@ export const useEditorStore = create<EditorState>()(
       characterCount: 0,
 
       setContent: (content: string) => {
+        if (get().content === content) {
+          return
+        }
         set({ content, hasUnsavedChanges: true })
-        get().updateStats(content)
+        scheduleStatsUpdate(content)
       },
 
       setCurrentFile: (path: string | null) => {
@@ -51,10 +130,16 @@ export const useEditorStore = create<EditorState>()(
       },
 
       setViewMode: (mode: ViewMode) => {
+        if (get().viewMode === mode) {
+          return
+        }
         set({ viewMode: mode })
       },
 
       setHasUnsavedChanges: (hasChanges: boolean) => {
+        if (get().hasUnsavedChanges === hasChanges) {
+          return
+        }
         set({ hasUnsavedChanges: hasChanges })
       },
 
@@ -116,6 +201,7 @@ export const useEditorStore = create<EditorState>()(
       },
 
       saveFile: async () => {
+        await requestEditorSyncIfNeeded()
         const { currentFilePath, content } = get()
         if (!currentFilePath) {
           return get().saveFileAs()
@@ -133,6 +219,7 @@ export const useEditorStore = create<EditorState>()(
 
       saveFileAs: async () => {
         try {
+          await requestEditorSyncIfNeeded()
           const { content } = get()
           const result = await invoke<string | null>('save_file_as', { content })
           if (!result) {
@@ -169,17 +256,24 @@ export const useEditorStore = create<EditorState>()(
       },
 
       updateStats: (content: string) => {
-        const lines = content.split('\n').length
-        const characters = content.length
-        const words = content.trim() === '' ? 0 : content.trim().split(/\s+/).length
-        
-        set({
-          wordCount: words,
-          lineCount: lines,
-          characterCount: characters,
+        const stats = computeDocumentStats(content)
+
+        set((state) => {
+          if (
+            state.wordCount === stats.wordCount &&
+            state.lineCount === stats.lineCount &&
+            state.characterCount === stats.characterCount
+          ) {
+            return state
+          }
+          return {
+            wordCount: stats.wordCount,
+            lineCount: stats.lineCount,
+            characterCount: stats.characterCount,
+          }
         })
       },
-    }),
+    })},
     {
       name: 'editor-storage',
       partialize: (state) => ({

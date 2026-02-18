@@ -29,3 +29,8 @@ src-tauri/Cargo.lock
 target-tauri
 src-tauri/target-codex
 src-tauri/target-codex*
+src-tauri/_icon_tmp/
+src-tauri/icons-gen-test/
+src-tauri/icons/*
+!src-tauri/icons/icon.ico
+new_icon_images/_preview16.png
